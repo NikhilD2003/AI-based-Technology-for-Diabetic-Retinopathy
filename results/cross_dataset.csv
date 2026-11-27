@@ -1,0 +1,13 @@
+direction,metric,same_dataset,other_dataset,drop
+APTOS -> IDRiD,qwk,0.869,0.663,0.207
+APTOS -> IDRiD,accuracy,0.768,0.432,0.337
+APTOS -> IDRiD,macro_f1,0.601,0.398,0.203
+APTOS -> IDRiD,referable_auc,0.981,0.908,0.073
+APTOS -> IDRiD,sensitivity,0.847,0.765,0.082
+APTOS -> IDRiD,specificity,0.966,0.898,0.068
+IDRiD -> APTOS,qwk,0.609,0.491,0.118
+IDRiD -> APTOS,accuracy,0.44,0.481,-0.041
+IDRiD -> APTOS,macro_f1,0.371,0.305,0.066
+IDRiD -> APTOS,referable_auc,0.852,0.815,0.037
+IDRiD -> APTOS,sensitivity,0.771,0.748,0.023
+IDRiD -> APTOS,specificity,0.778,0.729,0.049
