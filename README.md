@@ -24,7 +24,7 @@ next to this file.
 11. [Explainability: Grad-CAM](#11-explainability-grad-cam)
 12. [Limitations](#12-limitations)
 13. [Code explanation, file by file](#13-code-explanation-file-by-file)
-14. [How to reproduce](#14-how-to-reproduce)
+14. [How to run this project on a new PC](#14-how-to-run-this-project-on-a-new-pc)
 15. [Notes for the paper author](#15-notes-for-the-paper-author)
 
 ## 1. Overview
@@ -469,26 +469,105 @@ Counts finished prediction files every 5 seconds and draws a bar. It only reads 
 ### 13.9 `figures.py`
 Draws figures 1, 2, 7 and 10 from the image table, the image cache and the metric CSV files.
 
-## 14. How to reproduce
-Windows, NVIDIA GPU, Python 3.10 (tested on an RTX 4060 Laptop GPU, 8 GB). Libraries: PyTorch 2.5.1,
-torchvision 0.20.1, timm 1.0.30, scikit-learn 1.7.2, SciPy 1.15.3, NumPy 2.2.6, pandas 2.3.3,
-OpenCV 5.0.0, Matplotlib 3.10.9.
+## 14. How to run this project on a new PC
+The commands below are for **Windows PowerShell**. They were developed on one Windows laptop (RTX 4060 Laptop GPU,
+8 GB). They have not been tested on a second PC, in a new virtual environment, or on Linux or macOS.
 
-    py -3.10 -m pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu121
+### Choose what you want to do
+| Goal | Needs | Steps |
+|---|---|---|
+| **A. Recreate the tables and most figures from the saved predictions** | Python only; no GPU, no datasets | 1, 2, 3 |
+| **B. Retrain everything from scratch** | NVIDIA GPU, both datasets | 1, 2, 4, 5, 6 |
 
-Put APTOS in `data/APTOS/` and IDRiD in `data/IDRiD/B. Disease Grading/` (data are not committed). Then:
+### Requirements
+- Git and **Python 3.10** (64-bit).
+- For B: an NVIDIA GPU with a recent driver. Training code requires CUDA; there is no CPU mode. All images are
+  held in GPU memory, so use 8 GB or more (the only size tested).
+- For B: about 20 GB of free disk space (APTOS about 9.6 GB, image cache 2.4 GB, plus libraries, IDRiD and models).
+- An internet connection for installing libraries and, in B, downloading datasets and pretrained weights.
 
-    py -3.10 src/split.py       # results/splits.csv
-    py -3.10 src/data.py        # image cache, results/images.csv
-    py -3.10 src/baseline.py    # SVM and logistic regression
-    py -3.10 src/train.py       # 24 neural-network runs
-    py -3.10 src/progress.py    # optional, in a second terminal
-    py -3.10 src/analyze.py     # tables, tests, figures 3-6, 8, 9
-    py -3.10 src/gradcam.py     # figure 11
-    py -3.10 src/finetune.py    # fine-tuning experiment
-    py -3.10 src/figures.py     # figures 1, 2, 7, 10
+### Step 1: get the code
+The repository is private, so the owner must first add you as a collaborator.
 
-GPU training is not guaranteed to be bit-for-bit identical across runs or machines.
+    git clone https://github.com/NikhilD2003/AI-based-Technology-for-Diabetic-Retinopathy.git
+    cd AI-based-Technology-for-Diabetic-Retinopathy
+
+### Step 2: create an environment and install the libraries
+    py -3.10 -m venv .venv
+    .venv\Scripts\python -m pip install --upgrade pip
+    .venv\Scripts\python -m pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu121
+
+The PyTorch download is large. Calling `.venv\Scripts\python` directly means the environment does not need to be
+activated. In PyCharm or VS Code, select this interpreter. For B, check that the GPU is visible (must print `True`):
+
+    .venv\Scripts\python -c "import torch; print(torch.cuda.is_available())"
+
+Versions: PyTorch 2.5.1 (CUDA 12.1), torchvision 0.20.1, timm 1.0.30, scikit-learn 1.7.2, SciPy 1.15.3,
+NumPy 2.2.6, pandas 2.3.3, OpenCV 5.0.0, Matplotlib 3.10.9.
+
+### Step 3 (goal A): recreate the results from saved predictions
+    .venv\Scripts\python src/analyze.py
+
+This rewrites the CSV files, `results/SUMMARY.md` and figures 3-6, 8 and 9. On a fresh clone of this project on
+the development PC, with the GPU hidden and no datasets, the CSV files came out unchanged.
+The other figures need the images, so use the committed copies. **Stop here for goal A.**
+
+### Step 4 (goal B): download the datasets
+1. **APTOS 2019:** sign in to Kaggle, accept the competition rules and download the data from
+   https://www.kaggle.com/competitions/aptos2019-blindness-detection/data
+2. **IDRiD:** download `B. Disease Grading.zip` from https://zenodo.org/records/17219542
+
+Extract them so that the folders look exactly like this:
+
+    data/
+      APTOS/
+        train.csv
+        train_images/                      (3,662 .png files)
+      IDRiD/
+        B. Disease Grading/
+          1. Original Images/
+            a. Training Set/               (413 .jpg files)
+            b. Testing Set/                (103 .jpg files)
+          2. Groundtruths/                 (2 label .csv files)
+
+### Step 5 (goal B): clear the saved predictions
+**Important:** the repository includes saved predictions, and training **skips any run whose predictions exist**.
+Without this step, nothing is retrained and the model files needed for Grad-CAM are not created
+(model files are not on GitHub).
+
+    Remove-Item -Recurse -Force results\preds, results\finetune\preds
+
+This deletes only the clone's copies. They can be restored with `git checkout -- results`, which also discards
+any other changes you made under `results/`. Do not run this step on the original working copy unless you intend
+to retrain.
+
+### Step 6 (goal B): run everything, in this order
+    .venv\Scripts\python src/split.py       # results/splits.csv
+    .venv\Scripts\python src/data.py        # image cache, results/images.csv
+    .venv\Scripts\python src/baseline.py    # SVM and logistic regression
+    .venv\Scripts\python src/train.py       # 24 neural-network runs
+    .venv\Scripts\python src/analyze.py     # tables, tests, figures 3-6, 8, 9
+    .venv\Scripts\python src/gradcam.py     # figure 11
+    .venv\Scripts\python src/finetune.py    # separate fine-tuning experiment
+    .venv\Scripts\python src/figures.py     # figures 1, 2, 7, 10
+
+To watch training, run `.venv\Scripts\python src/progress.py` in a second terminal. On the development laptop,
+most runs took 0.2-4 minutes each; allow about 45 minutes for the main training. Slower GPUs take longer.
+If training stops, run the same command again: finished runs are skipped and the interrupted one starts over.
+Retrained scores may differ somewhat from the committed ones, because GPU training is not guaranteed to be
+bit-for-bit identical. The text of this README does not update itself.
+
+### Common problems
+| Problem | Fix |
+|---|---|
+| `Torch not compiled with CUDA enabled`, or the GPU check prints `False` | Check that you are using `.venv\Scripts\python`, the install used the `--extra-index-url` above, and the NVIDIA driver is up to date |
+| `FileNotFoundError` under `data/cache` | Run `src/data.py` first (step 6) |
+| `FileNotFoundError` for an image or label file | Compare your folders with step 4 |
+| Training prints `ALL DONE` immediately | Saved predictions still exist: see step 5 |
+| `gradcam.py` cannot find `full.pt` | Train after step 5 so the model file is created |
+| `CUDA out of memory` | Close other GPU programs. On a smaller GPU the code would need changes (images are kept in GPU memory) |
+
+### Where each paper item comes from
 
 | Paper item | File it comes from | Script |
 |---|---|---|
