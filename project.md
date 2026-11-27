@@ -35,6 +35,7 @@ Supervisor: Dr. Rohit Ahuja · Evaluation: after Diwali break
 - [x] **Statistical analysis**: multiple seeds (mean ± SD), bootstrap 95% CIs, McNemar / paired t-test between models, DeLong for AUC
 - [x] **Cross-dataset validation**: train on dataset A → test on B (and reverse); report performance drop
 - [x] **Main model: original APTOS-trained EfficientNet-B0** (`full`)
+- [x] Separate experiment (does not replace the main model): fine-tuning APTOS model on IDRiD (`src/finetune.py`, `results/finetune/`)
 
 ## Phase 4 — Research paper (Overleaf / LaTeX)
 

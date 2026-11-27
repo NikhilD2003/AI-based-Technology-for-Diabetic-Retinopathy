@@ -20,6 +20,7 @@ next to this file.
 7. [Experimental setup A: ablation study](#7-experimental-setup-a-ablation-study)
 8. [Experimental setup B: statistical analysis](#8-experimental-setup-b-statistical-analysis)
 9. [Experimental setup C: cross-dataset validation](#9-experimental-setup-c-cross-dataset-validation)
+10. [Separate experiment: fine-tuning on IDRiD](#10-separate-experiment-fine-tuning-on-idrid)
 11. [Explainability: Grad-CAM](#11-explainability-grad-cam)
 12. [Limitations](#12-limitations)
 13. [Code explanation, file by file](#13-code-explanation-file-by-file)
@@ -31,7 +32,7 @@ next to this file.
 0 none, 1 mild, 2 moderate, 3 severe, 4 proliferative. A second, binary view is **referable DR** (grade 2 or higher).
 
 **Main model:** the original APTOS-trained EfficientNet-B0 (`full`). Its results are the main results of this
-project.
+project. Fine-tuning on IDRiD (section 10) is a **separate experiment** and does not replace it.
 
 **Main setup:** EfficientNet-B0 pretrained on ImageNet, fine-tuned on APTOS 2019, and tested on an APTOS test
 split and on a second dataset, IDRiD.
@@ -47,12 +48,13 @@ flowchart LR
 - APTOS test: quadratic weighted kappa (QWK) 0.869 ± 0.021 (mean ± SD, 3 seeds).
 - On IDRiD, which this model never trained on, QWK falls to 0.663 ± 0.017. Referable-DR AUC is 0.908.
 - No ablation made a statistically significant difference on the APTOS test set (McNemar and DeLong, Holm-corrected).
+- Fine-tuning on IDRiD raised 5-grade accuracy there, but the QWK gain was not significant and APTOS performance fell.
 
 ## 2. Datasets
 | Dataset | Role | Labelled images used | Source |
 |---|---|---|---|
 | APTOS 2019 Blindness Detection | training, validation, test | 3,504 | Kaggle competition data |
-| IDRiD, Disease Grading | external test; reverse direction | 516 | CC BY 4.0 mirror: https://zenodo.org/records/17219542 |
+| IDRiD, Disease Grading | external test; reverse direction; fine-tuning | 516 | CC BY 4.0 mirror: https://zenodo.org/records/17219542 |
 
 IDRiD citation: Porwal et al., "Indian Diabetic Retinopathy Image Dataset (IDRiD): A Database for Diabetic
 Retinopathy Screening Research", *Data*, 3(3), 25, 2018.
@@ -323,6 +325,43 @@ are predicted as grade 1.*
 - The two directions are not directly comparable: their training sets differ greatly in size.
   The IDRiD → APTOS QWK also varies widely between seeds.
 
+## 10. Separate experiment: fine-tuning on IDRiD
+This is **domain adaptation**, not cross-dataset validation: the model now sees labelled IDRiD images.
+It does **not** replace the 0.663 result in section 9.
+
+**Design (settings fixed before running, run once):** take the APTOS-trained EfficientNet-B0; continue training
+on 351 IDRiD images (learning rate 1e-4, 15 epochs); select the epoch on 62 IDRiD validation images; test on
+the 103 official IDRiD test images. Each fine-tuned model is compared with the exact checkpoint it started from.
+The experiment was added after the section 9 results had been seen.
+
+| Test set | Model | QWK | Accuracy | Macro F1 | Macro AUC | Referable AUC | Sensitivity | Specificity |
+|---|---|---|---|---|---|---|---|---|
+| idrid_test | before | 0.526 ± 0.031 | 0.356 ± 0.022 | 0.334 ± 0.025 | 0.777 ± 0.029 | 0.840 ± 0.012 | 0.719 ± 0.016 | 0.803 ± 0.015 |
+| aptos_test | before | 0.869 ± 0.021 | 0.768 ± 0.033 | 0.601 ± 0.041 | 0.934 ± 0.007 | 0.981 ± 0.002 | 0.847 ± 0.016 | 0.966 ± 0.008 |
+| idrid_test | fine-tuned | 0.590 ± 0.038 | 0.469 ± 0.015 | 0.421 ± 0.037 | 0.775 ± 0.038 | 0.850 ± 0.002 | 0.792 ± 0.079 | 0.744 ± 0.128 |
+| aptos_test | fine-tuned | 0.834 ± 0.036 | 0.736 ± 0.021 | 0.577 ± 0.021 | 0.896 ± 0.015 | 0.955 ± 0.028 | 0.899 ± 0.032 | 0.902 ± 0.061 |
+
+Paired tests (seed-averaged, fine-tuned minus before, p-values not corrected):
+
+| eval | images | qwk_base | qwk_finetuned | qwk_diff_ci95 | accuracy_diff | mcnemar_p | auc_diff | delong_p |
+|---|---|---|---|---|---|---|---|---|
+| idrid_test | 103 | 0.536 | 0.579 | [-0.080, 0.164] | 0.175 | 0.00143 | 0.008 | 0.594 |
+| aptos_test | 526 | 0.883 | 0.852 | [-0.059, -0.005] | -0.046 | 0.0127 | -0.009 | 0.00257 |
+
+![Fine-tuning](results/figures/finetune.png)
+
+*Figure 10. Before and after fine-tuning on both test sets (mean ± SD).*
+
+**Findings**
+- On IDRiD test, mean QWK rose from 0.526 to 0.590, but the QWK difference is **not significant**
+  (the bootstrap interval includes 0). Accuracy rose significantly. Referable AUC did not change significantly.
+- On APTOS test, mean QWK, accuracy and referable AUC all fell, and the paired tests indicate a significant drop
+  (partial *forgetting* of the original data).
+- Training on IDRiD alone (section 9) scored QWK 0.609 ± 0.046 on the same 103 images, so fine-tuning
+  showed no advantage over it in mean QWK (the two were not tested statistically).
+- The "before" QWK here (0.526) is lower than 0.663 because it uses only the 103 test images.
+  **Compare only values on the same images.**
+
 ## 11. Explainability: Grad-CAM
 For class $c$, each of the last convolutional feature maps $A^k$ is weighted by the average gradient of the
 class score $y^c$:
@@ -359,7 +398,8 @@ They are not proof that the model detects lesions. No comparison with lesion ann
 | `src/progress.py` | progress bar |
 | `src/analyze.py` | metrics, statistical tests, cross-dataset tables, figures |
 | `src/gradcam.py` | Grad-CAM figure |
-| `src/figures.py` | dataset, preprocessing and cross-dataset figures |
+| `src/finetune.py` | fine-tuning on IDRiD |
+| `src/figures.py` | dataset, preprocessing, cross-dataset and fine-tuning figures |
 
 ### 13.1 `split.py`
 - **Hashing:** computes an MD5 hash of every APTOS image file; equal hashes mean identical files.
@@ -394,7 +434,7 @@ They are not proof that the model detects lesions. No comparison with lesion ann
   per image for rotation, mirror and scale; then brightness and contrast) and normalises.
 - **`predict()`:** softmax probabilities without gradients or augmentation.
 - **`run()`, setup:** fixes the random seeds, computes class weights from the training labels and creates the
-  loss, AdamW and the one-cycle schedule.
+  loss, AdamW and the one-cycle schedule. With `init`, it starts from a saved checkpoint (fine-tuning).
 - **`run()`, training loop:** shuffle; forward pass in mixed precision; loss; scaled backward pass;
   optimiser and schedule steps. After each epoch it computes validation QWK and keeps the best weights.
 - **`run()`, saving:** restores the best weights and saves probabilities for all images (`.npz`) and the
@@ -420,8 +460,14 @@ Counts finished prediction files every 5 seconds and draws a bar. It only reads 
   the gradients into weights, sums the weighted maps, applies ReLU, upsamples and scales to 0–1.
 - **Main block:** picks the most confident correct image per grade and dataset and overlays the heat map.
 
-### 13.8 `figures.py`
-Draws figures 1, 2 and 7 from the image table, the image cache and the metric CSV files.
+### 13.8 `finetune.py`
+- **`FINETUNE`:** the fixed settings (IDRiD as source, learning rate 1e-4, 15 epochs).
+- **`train_all()`:** for each seed, retrains the APTOS starting model, saves it, then continues it on IDRiD.
+- **`report()`:** compares before and after on IDRiD test and APTOS test with the same metrics and tests.
+  Outputs go to `results/finetune/`, leaving the main results unchanged.
+
+### 13.9 `figures.py`
+Draws figures 1, 2, 7 and 10 from the image table, the image cache and the metric CSV files.
 
 ## 14. How to reproduce
 Windows, NVIDIA GPU, Python 3.10 (tested on an RTX 4060 Laptop GPU, 8 GB). Libraries: PyTorch 2.5.1,
@@ -439,7 +485,8 @@ Put APTOS in `data/APTOS/` and IDRiD in `data/IDRiD/B. Disease Grading/` (data a
     py -3.10 src/progress.py    # optional, in a second terminal
     py -3.10 src/analyze.py     # tables, tests, figures 3-6, 8, 9
     py -3.10 src/gradcam.py     # figure 11
-    py -3.10 src/figures.py     # figures 1, 2, 7
+    py -3.10 src/finetune.py    # fine-tuning experiment
+    py -3.10 src/figures.py     # figures 1, 2, 7, 10
 
 GPU training is not guaranteed to be bit-for-bit identical across runs or machines.
 
@@ -449,13 +496,14 @@ GPU training is not guaranteed to be bit-for-bit identical across runs or machin
 | Confidence intervals | `results/bootstrap_ci.csv` | `analyze.py` |
 | Significance tests | `results/significance_tests.csv` | `analyze.py` |
 | Cross-dataset table | `results/cross_dataset.csv` | `analyze.py` |
+| Fine-tuning tables | `results/finetune/*.csv` | `finetune.py` |
 
 ## 15. Notes for the paper author
-- The result tables in sections 2 and 6–9 were filled by a script from the result files.
+- The result tables in sections 2 and 6–10 were filled by a script from the result files.
   Numbers quoted in the text were written by hand from the same results.
 - Use QWK as the primary metric. State whether a number is a per-seed mean or from seed-averaged probabilities.
 - Say "no significant difference detected", not "no effect". Do not call EfficientNet-B0 the best model.
-- Report 0.663 as the cross-dataset result.
+- Report 0.663 as the cross-dataset result. Keep fine-tuning separate and labelled as domain adaptation.
 - Add and **check** references for APTOS, EfficientNet, ResNet, AdamW, Grad-CAM, DeLong, McNemar, Holm,
   the bootstrap and Ben Graham's preprocessing. Only the IDRiD reference is given here.
 - GitHub repository (private): https://github.com/NikhilD2003/AI-based-Technology-for-Diabetic-Retinopathy

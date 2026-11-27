@@ -92,9 +92,11 @@ def predict(net, images, idx, size):
     return torch.cat(out).numpy()
 
 
-def run(name, seed, t, caches):
-    cfg = {**BASE, **EXPERIMENTS[name]}
-    out = PREDS / f"{name}_s{seed}.npz"
+def run(name, seed, t, caches, cfg=None, init=None, preds=PREDS, models=MODELS, keep=None):
+    """Train one experiment. init: checkpoint to continue from (fine-tuning); keep: save the weights."""
+    cfg = cfg or {**BASE, **EXPERIMENTS[name]}
+    keep = seed == 0 if keep is None else keep
+    out = preds / f"{name}_s{seed}.npz"
     if out.exists():
         return
     torch.manual_seed(seed)
@@ -106,6 +108,8 @@ def run(name, seed, t, caches):
     train, val = ids("train"), ids("val")
 
     net = build(cfg["model"]).cuda()
+    if init:
+        net.load_state_dict(torch.load(init, weights_only=True))
     counts = torch.bincount(y[train], minlength=5).float()
     weight = len(train) / (5 * counts) if cfg["weighted"] else None   # w_c = N / (K * n_c)
     loss_fn = nn.CrossEntropyLoss(weight=weight)
@@ -138,12 +142,12 @@ def run(name, seed, t, caches):
 
     net.load_state_dict(best[1])
     probs = predict(net, images, torch.arange(len(t), device="cuda"), cfg["size"])
-    PREDS.mkdir(parents=True, exist_ok=True)
-    if seed == 0:
-        MODELS.mkdir(parents=True, exist_ok=True)
-        torch.save(best[1], MODELS / f"{name}.pt")
+    preds.mkdir(parents=True, exist_ok=True)
+    if keep:
+        models.mkdir(parents=True, exist_ok=True)
+        torch.save(best[1], models / (f"{name}.pt" if models == MODELS else f"{name}_s{seed}.pt"))
     minutes = (time.time() - start) / 60
-    (PREDS / f"{name}_s{seed}.json").write_text(json.dumps(dict(config=cfg, minutes=minutes, history=history), indent=1))
+    (preds / f"{name}_s{seed}.json").write_text(json.dumps(dict(config=cfg, minutes=minutes, history=history), indent=1))
     np.savez_compressed(out, probs=probs)  # written last: its presence marks the run as done
     print(f"{name} seed {seed}: val QWK {best[0]:.4f} in {minutes:.1f} min", flush=True)
 

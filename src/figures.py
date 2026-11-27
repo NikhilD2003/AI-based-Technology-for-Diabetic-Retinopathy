@@ -1,6 +1,6 @@
-"""Descriptive figures for the report: class distribution, preprocessing and cross-dataset.
+"""Descriptive figures for the report: class distribution, preprocessing, cross-dataset and fine-tuning.
 
-    py -3.10 src/figures.py     # after analyze.py
+    py -3.10 src/figures.py     # after analyze.py and finetune.py
 """
 import matplotlib
 matplotlib.use("Agg")
@@ -55,4 +55,13 @@ for ax, (title, model, evals, labels) in zip(axes, panels):
     ax.set_title(f"Train {title.replace('->', '→ test')}"), ax.set_ylim(0, 1.15), ax.legend(fontsize=8, loc="upper left")
 save(fig, "cross_dataset.png")
 
+ft = pd.read_csv(OUT / "finetune/metrics_per_seed.csv")
+fig, axes = plt.subplots(1, 2, figsize=(11, 4), sharey=True)
+for ax, (e, title) in zip(axes, [("idrid_test", "IDRiD test (103 images)"), ("aptos_test", "APTOS test (526 images)")]):
+    for k, (model, label) in enumerate([("base", "before fine-tuning"), ("finetuned", "after fine-tuning")]):
+        d = ft[(ft.model == model) & (ft["eval"] == e)][metrics]
+        ax.bar(np.arange(len(metrics)) + (k - 0.5) * 0.38, d.mean(), 0.38, yerr=d.std(), capsize=3, label=label)
+    ax.set_xticks(range(len(metrics)), ["QWK", "Accuracy", "Macro F1", "Referable AUC"])
+    ax.set_title(title), ax.set_ylim(0, 1.15), ax.legend(fontsize=8, loc="upper left")
+save(fig, "finetune.png")
 print("figures written")
